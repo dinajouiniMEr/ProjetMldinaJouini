@@ -1,0 +1,62 @@
+{
+  "nb_exemples": 42,
+  "nb_train": 31,
+  "nb_test": 11,
+  "accuracy": 0.6363636363636364,
+  "accuracy_cv5": 0.763888888888889,
+  "labels": [
+    "negatif",
+    "neutre",
+    "positif"
+  ],
+  "rapport_classification": {
+    "negatif": {
+      "precision": 0.5,
+      "recall": 0.6666666666666666,
+      "f1-score": 0.5714285714285714,
+      "support": 3.0
+    },
+    "neutre": {
+      "precision": 1.0,
+      "recall": 0.5,
+      "f1-score": 0.6666666666666666,
+      "support": 4.0
+    },
+    "positif": {
+      "precision": 0.6,
+      "recall": 0.75,
+      "f1-score": 0.6666666666666666,
+      "support": 4.0
+    },
+    "accuracy": 0.6363636363636364,
+    "macro avg": {
+      "precision": 0.7000000000000001,
+      "recall": 0.6388888888888888,
+      "f1-score": 0.6349206349206349,
+      "support": 11.0
+    },
+    "weighted avg": {
+      "precision": 0.7181818181818183,
+      "recall": 0.6363636363636364,
+      "f1-score": 0.6406926406926406,
+      "support": 11.0
+    }
+  },
+  "matrice_confusion": [
+    [
+      2,
+      0,
+      1
+    ],
+    [
+      1,
+      2,
+      1
+    ],
+    [
+      1,
+      0,
+      3
+    ]
+  ]
+}

@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Voice Check — Classifieur de sentiment</title>
+<style>
+  :root { color-scheme: light; font-family: system-ui, -apple-system, Segoe UI, sans-serif; }
+  body { margin: 0; background: #f4f6fb; color: #1b2340; }
+  header { background: #1b2340; color: white; padding: 22px 32px; }
+  header h1 { margin: 0; font-size: 22px; }
+  header p { margin: 6px 0 0; opacity: .75; font-size: 14px; }
+  header a { color: #9fb8ff; }
+  main { max-width: 780px; margin: 32px auto; padding: 0 16px; }
+  .card { background: white; border-radius: 14px; padding: 24px; box-shadow: 0 8px 24px #1b234012; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+  .tabs button { border: 1px solid #d6dbe8; background: #fff; padding: 9px 16px; border-radius: 999px; cursor: pointer; font-size: 14px; }
+  .tabs button.active { background: #1b2340; color: white; border-color: #1b2340; }
+  label { display: block; font-weight: 600; margin: 14px 0 6px; font-size: 14px; }
+  textarea, input[type=file] { width: 100%; box-sizing: border-box; }
+  textarea { min-height: 130px; padding: 12px; border-radius: 10px; border: 1px solid #ccd3e3; font: inherit; resize: vertical; }
+  input[type=file] { padding: 12px; border: 1px dashed #a9b3cc; border-radius: 10px; background: #fafbff; }
+  .actions { margin-top: 20px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  button.submit { background: #3557d9; color: white; border: 0; border-radius: 10px; padding: 11px 22px; font-weight: 600; cursor: pointer; font-size: 15px; }
+  button.submit:disabled { opacity: .55; cursor: wait; }
+  .hint { font-size: 13px; color: #66708c; }
+  #resultat { margin-top: 22px; display: none; }
+  .badge { display: inline-block; padding: 7px 14px; border-radius: 999px; font-weight: 700; text-transform: capitalize; }
+  .positif { background: #dcfce7; color: #166534; }
+  .negatif { background: #fee2e2; color: #991b1b; }
+  .neutre { background: #e5e7eb; color: #374151; }
+  .barre { height: 10px; border-radius: 999px; background: #e5e7eb; overflow: hidden; margin: 10px 0 4px; }
+  .barre > div { height: 100%; background: #3557d9; transition: width .4s; }
+  .texte { background: #f7f8fc; border-radius: 10px; padding: 12px; font-size: 14px; white-space: pre-wrap; word-break: break-word; }
+  .erreur { color: #b91c1c; margin-top: 14px; font-size: 14px; }
+  code { background: #eef1f8; padding: 2px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Voice Check — avis client multi-source</h1>
+  <p>Texte, image ou audio &rarr; sentiment unique. <a href="/docs">Swagger /docs</a> &middot; <a href="/redoc">ReDoc</a></p>
+</header>
+<main>
+  <div class="card">
+    <div class="tabs">
+      <button data-mode="texte" class="active">Texte</button>
+      <button data-mode="image">Image (OCR)</button>
+      <button data-mode="audio">Audio (ASR)</button>
+      <button data-mode="auto">Détection auto</button>
+    </div>
+
+    <div id="panneau-texte">
+      <label for="texte">Avis client</label>
+      <textarea id="texte" placeholder="Ex. : Livraison rapide et produit conforme, je recommande !">Livraison rapide et produit conforme, je recommande !</textarea>
+    </div>
+    <div id="panneau-image" hidden>
+      <label for="fichier-image">Capture d'écran ou ticket scanné</label>
+      <input type="file" id="fichier-image" accept="image/png,image/jpeg,image/webp">
+    </div>
+    <div id="panneau-audio" hidden>
+      <label for="fichier-audio">Message vocal (.wav, .mp3, .ogg)</label>
+      <input type="file" id="fichier-audio" accept="audio/*">
+    </div>
+    <div id="panneau-auto" hidden>
+      <label for="fichier-auto">Fichier image ou audio (la route devine le type)</label>
+      <input type="file" id="fichier-auto" accept="image/*,audio/*">
+      <p class="hint">Vous pouvez aussi envoyer du texte via la route <code>/predict</code> en JSON.</p>
+    </div>
+
+    <div class="actions">
+      <button class="submit" id="envoyer">Analyser l'avis</button>
+      <span class="hint" id="statut"></span>
+    </div>
+
+    <div id="erreur" class="erreur"></div>
+    <div id="resultat">
+      <h3>Résultat</h3>
+      <span class="badge" id="sentiment"></span>
+      <p class="hint">Confiance : <strong id="confiance"></strong></p>
+      <div class="barre"><div id="jauge"></div></div>
+      <p class="hint">Source : <strong id="source"></strong></p>
+      <p class="hint">Texte extrait :</p>
+      <div class="texte" id="texte-extrait"></div>
+    </div>
+  </div>
+</main>
+<script>
+let mode = "texte";
+const buttons = document.querySelectorAll(".tabs button");
+buttons.forEach(btn => btn.addEventListener("click", () => {
+  mode = btn.dataset.mode;
+  buttons.forEach(b => b.classList.toggle("active", b === btn));
+  ["texte", "image", "audio", "auto"].forEach(m => {
+    document.getElementById("panneau-" + m).hidden = m !== mode;
+  });
+  document.getElementById("erreur").textContent = "";
+}));
+
+document.getElementById("envoyer").addEventListener("click", async () => {
+  const bouton = document.getElementById("envoyer");
+  const statut = document.getElementById("statut");
+  const erreur = document.getElementById("erreur");
+  erreur.textContent = "";
+  statut.textContent = "Analyse en cours…";
+  bouton.disabled = true;
+
+  let url, options;
+  if (mode === "texte") {
+    url = "/predict/text";
+    options = { method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ texte: document.getElementById("texte").value }) };
+  } else if (mode === "image" || mode === "audio" || mode === "auto") {
+    const id = mode === "auto" ? "fichier-auto" : "fichier-" + mode;
+    const fichier = document.getElementById(id).files[0];
+    if (!fichier) {
+      erreur.textContent = "Choisissez d'abord un fichier.";
+      statut.textContent = "";
+      bouton.disabled = false;
+      return;
+    }
+    const data = new FormData();
+    data.append("file", fichier);
+    url = mode === "auto" ? "/predict" : "/predict/" + mode;
+    options = { method: "POST", body: data };
+  }
+
+  try {
+    const reponse = await fetch(url, options);
+    const corps = await reponse.json();
+    if (!reponse.ok) throw new Error(typeof corps.detail === "string" ? corps.detail : JSON.stringify(corps.detail));
+    document.getElementById("resultat").style.display = "block";
+    document.getElementById("sentiment").textContent = corps.sentiment_predit;
+    document.getElementById("sentiment").className = "badge " + corps.sentiment_predit;
+    document.getElementById("confiance").textContent = (corps.confiance * 100).toFixed(1) + " %";
+    document.getElementById("jauge").style.width = (corps.confiance * 100) + "%";
+    document.getElementById("source").textContent = corps.source;
+    document.getElementById("texte-extrait").textContent = corps.texte_extrait;
+    statut.textContent = "Terminé";
+  } catch (e) {
+    document.getElementById("resultat").style.display = "none";
+    erreur.textContent = "Erreur : " + e.message;
+    statut.textContent = "";
+  } finally {
+    bouton.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
